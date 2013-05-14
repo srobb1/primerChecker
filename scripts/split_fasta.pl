@@ -6,7 +6,7 @@ my $file = shift;
 if (!defined $file){
   print "Usage:
 
-	./fasta_splitter.pl FASTA_FILE
+	./split_fasta.pl FASTA_FILE
 
 FASTA file will be split into many smaller files with one sequence per file
 
