@@ -26,9 +26,9 @@ if ($first_line =~ /^>(\S+)/){
   while (my $seq_line = <FASTA>){
     chomp $seq_line;
     if ($seq_line =~ /^>(\S+)/){
-      $id = $1;
       printSeq(\$seq);
       $seq='';
+      ($id) = $seq_line =~ /^>(\S+)/;
       $count++;
     }else{
       $seq.=$seq_line;
