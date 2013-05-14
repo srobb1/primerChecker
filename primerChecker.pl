@@ -19,6 +19,7 @@ print "inputed primer sets
 if ( $format == 1 ) {
   while ( my $line = <PRIMERS> ) {
     chomp $line;
+    next if $line =~ /^#/;
     ( $id, $p1, $p2 ) = split /\t/, $line;
     print "$id,$p1,$p2\n";
     $id =~ s/\s+//g;
