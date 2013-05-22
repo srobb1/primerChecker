@@ -342,7 +342,7 @@ foreach my $id ( sort keys %primers ) {
                       $inner_exon_size +
                       $exon_p2_product_size;
                     $results{$id}{$product_size}{info} =
-"$id\t$product_size|$cDNA_product_size\t$tName:$p1_range_str\t$tName:$p2_range_str";
+"$id\t$product_size|$cDNA_product_size\t$gene_name|$tName:$p1_range_str\t$tName:$p2_range_str";
                     if ( $p1_s > $p2_s ) {
                       $results{$id}{$product_size}{gbrowse} =
 "primers\t$id($product_size)\t$tName:$p2_range_str,$p1_range_str";
