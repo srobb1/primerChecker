@@ -83,6 +83,8 @@ if ( $format == 1 ) {
 
     $primers{$id}{p1}{seq} = $p1;
     $primers{$id}{p2}{seq} = $p2;
+    $primers{$id}{p1}{good} = 0;
+    $primers{$id}{p2}{good} = 0 ;
     print FASTA ">$id", "_p1\n$p1\n";
     print FASTA ">$id", "_p2\n$p2\n";
   }
@@ -115,6 +117,8 @@ elsif ( $format == 2 ) {
 
     $primers{$id}{p1}{seq} = $p1;
     $primers{$id}{p2}{seq} = $p2;
+    $primers{$id}{p1}{good} = 1;
+    $primers{$id}{p2}{good} = 1 ;
     print FASTA ">$id", "_p1\n$p1\n";
     print FASTA ">$id", "_p2\n$p2\n";
   }
@@ -234,6 +238,8 @@ foreach my $id ( sort keys %primers ) {
           my $p1_range_str = join( '..', @$p1_range );
           my $p2_range_str = join( '..', @$p2_range );
 
+          $primers{$id}{p1}{good} = 1;
+          $primers{$id}{p2}{good} = 1 ;
           if ( $p1_s > $p2_s ) {
             $results{$id}{$product_size}{gbrowse} =
               "primers\t$id($product_size)\t$tName:$p2_range_str,$p1_range_str";
@@ -243,7 +249,7 @@ foreach my $id ( sort keys %primers ) {
               "primers\t$id($product_size)\t$tName:$p1_range_str,$p2_range_str";
           }
           $results{$id}{$product_size}{info} =
-"$id\t$product_size\tp1($p1_strand)|$tName:$p1_range_str\tp2($p2_strand)|$tName:$p2_range_str";
+"$id\t$product_size\tp1|$p1_strand;p2|$p2_strand\t$tName:$p1_range_str\t$tName:$p2_range_str";
           if ( $type eq 'cDNA' and $product_size < 10000 ) {
             my ($hit_first_digit) = $hit_start =~ /^(\d)/;
             my $last_start        = 0;
@@ -289,14 +295,16 @@ foreach my $id ( sort keys %primers ) {
                     my $exon_p2_product_size = 0;
                     my $p1_exon;
                     my $p2_exon;
+                    my $exon_score;
                     foreach my $exon ( sort { $a <=> $b } keys %cDNA ) {
                       next
                         if !exists $cDNA{$exon}{p1}
                           and !exists $cDNA{$exon}{p2};
                       my $exon_size  = $cDNA{$exon}{size};
                       my $exon_range = $cDNA{$exon}{range};
-                      if ( $cDNA{$exon}{p1} ) {
+                      if ( $cDNA{$exon}{p1}) {
                         $p1_exon = $exon;
+                        $exon_score+=$cDNA{$exon}{p1};
                         if ( $p1_s < $p2_s ) {
                           $exon_p1_product_size =
                             range_get_end($exon_range) - $p1_s + 1;
@@ -306,7 +314,8 @@ foreach my $id ( sort keys %primers ) {
                             $p1_e - range_get_start($exon_range) + 1;
                         }
                       }
-                      elsif ( $cDNA{$exon}{p2} ) {
+                      elsif ( $cDNA{$exon}{p2}) {
+                        $exon_score+=$cDNA{$exon}{p2};
                         $p2_exon = $exon;
                         if ( $p1_s < $p2_s ) {
                           $exon_p2_product_size =
@@ -342,7 +351,7 @@ foreach my $id ( sort keys %primers ) {
                       $inner_exon_size +
                       $exon_p2_product_size;
                     $results{$id}{$product_size}{info} =
-"$id\t$product_size|$cDNA_product_size\t$gene_name|$tName:$p1_range_str\t$tName:$p2_range_str";
+"$id\t$product_size|$cDNA_product_size\t$gene_name;$exon_score;p1|$p1_strand|$cDNA{$p1_exon}{p1};p2|$p2_strand|$cDNA{$p2_exon}{p2}\t$tName:$p1_range_str\t$tName:$p2_range_str";
                     if ( $p1_s > $p2_s ) {
                       $results{$id}{$product_size}{gbrowse} =
 "primers\t$id($product_size)\t$tName:$p2_range_str,$p1_range_str";
@@ -367,6 +376,12 @@ foreach my $id ( sort keys %results ) {
   foreach my $product_size ( sort { $a <=> $b } keys %{ $results{$id} } ) {
     print $results{$id}{$product_size}{info}, "\n";
     print GBROWSE $results{$id}{$product_size}{gbrowse}, "\n";
+  }
+}
+foreach my $id (sort keys %primers){
+  my $good = $primers{$id}{p1}{good};
+  if (!$good){
+    print "$id\tnoHits\n";
   }
 }
 
