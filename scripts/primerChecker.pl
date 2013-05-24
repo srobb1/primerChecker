@@ -20,13 +20,13 @@ GetOptions(
 sub getHelp {
   print ' 
 usage:
-./primerChecker.pl [-o organism][-f primerFile][-t type][-i inputFormat][-h] 
+./primerChecker.pl [-o organism][-f primerFile][-t type (1|2)][-i inputFormat (1|2)][-h] 
 
 options:
 -o | --organism		string		rice,maize
 -f | --primersFile      file		file with primer id and sequences 
--t | --type		int		1=Genomic; 2=cDNA
--i | --format		int		1=l line with both primers; 2=2 lines, 1 for each primers
+-t | --type		int		[1 or 2]; 1=Genomic; 2=cDNA
+-i | --format		int		[1 or 2]; 1=l line with both primers; 2=2 lines, 1 for each primers
 -h | --help				this help message
 
 
