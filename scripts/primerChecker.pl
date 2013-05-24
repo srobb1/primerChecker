@@ -62,6 +62,7 @@ open GBROWSE, ">$primersFile.forBrowser.txt"
   or die "Can't Open $primersFile.forBrowser\n";
 print GBROWSE "[primers]
 glyph = segments
+feature = primers
 \n\n";
 open PRIMERS, $primersFile       or die "Can't Open $primersFile\n";
 open FASTA,   ">$primersFile.fa" or die "Can't Open $primersFile.fa\n";
@@ -354,11 +355,11 @@ foreach my $id ( sort keys %primers ) {
 "$id\t$product_size|$cDNA_product_size\t$gene_name;$exon_score;p1|$p1_strand|$cDNA{$p1_exon}{p1};p2|$p2_strand|$cDNA{$p2_exon}{p2}\t$tName:$p1_range_str\t$tName:$p2_range_str";
                     if ( $p1_s > $p2_s ) {
                       $results{$id}{$product_size}{gbrowse} =
-"primers\t$id($product_size)\t$tName:$p2_range_str,$p1_range_str";
+"primers\t$id($product_size|$cDNA_product_size)\t$tName:$p2_range_str,$p1_range_str";
                     }
                     else {
                       $results{$id}{$product_size}{gbrowse} =
-"primers\t$id($product_size)\t$tName:$p1_range_str,$p2_range_str";
+"primers\t$id($product_size|$cDNA_product_size)\t$tName:$p1_range_str,$p2_range_str";
                     }
                   }
                 }
