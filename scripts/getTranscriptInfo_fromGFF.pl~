@@ -5,12 +5,7 @@ use Bio::DB::SeqFeature::Store;
 use Data::Dumper;
 
 my $GFF = shift;
-die "
-Please provide a GFF3 file with mRNA and exon features
-
-./getTranscriptInfo_fromGFF.pl GFF3-file
-
-" if !defined $GFF;
+die "Please provide a GFF3 file with mRNA and exon features" if !defined $GFF;
 
 #############################################################################
 ## make a Bio::DB::SeqFeature::Store object (contains info about  organism in

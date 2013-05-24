@@ -5,12 +5,7 @@ use Bio::DB::SeqFeature::Store;
 use Data::Dumper;
 
 my $sqlite = shift;
-die "
-Please provide a SQLite datafile of a seqfeature db
-
-./getTranscriptInfo_fromSFF.pl SQLITE-SeqFeatueStore-db
-
-" if !defined $sqlite;
+die "Please provide a SQLite datafile of a seqfeature db" if !defined $sqlite;
 
 #############################################################################
 ## make a Bio::DB::SeqFeature::Store object (contains info about  organism in
