@@ -3,7 +3,7 @@ use strict;
 use Data::Dumper;
 use File::Spec;
 use Getopt::Long;
-use Tie::File;
+#use Tie::File;
 
 if ( !defined @ARGV ) {
   &getHelp();
