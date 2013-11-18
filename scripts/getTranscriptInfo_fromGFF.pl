@@ -1,7 +1,6 @@
 #!/usr/bin/perl
 use warnings;
 use strict;
-use Bio::DB::SeqFeature::Store;
 use Data::Dumper;
 
 my $GFF = shift;
@@ -12,12 +11,6 @@ Please provide a GFF3 file with mRNA and exon features
 
 " if !defined $GFF;
 
-#############################################################################
-## make a Bio::DB::SeqFeature::Store object (contains info about  organism in
-## SQLite database and all the methods needed to interact with the database
-#############################################################################
-
-#Open the sequence database
 open GFF, $GFF or die "Can't open $GFF\n";
 open OUTEXONS, ">transcript_exons_info.txt" or die "Can't open transcript_exons_info.txt";
 my %genes;
