@@ -7,7 +7,7 @@ use Tie::File;
 use Getopt::Std;
 use CGI':standard';
 use IO::String;
-
+use CGI::Carp qw(fatalsToBrowser);
 
 if (!param){
 
@@ -19,26 +19,30 @@ print
     start_multipart_form,
 
 #textbox for seq
-    "Input one or more Primer sets in the following format:
-NAME<tab>forwardPrimer<tab>ReversePrimer 
-NAME<tab>forwardPrimer<tab>ReversePrimer", 
-
+    "Input one or more Primer sets in the following format:",
+     br,
+     "NAME,forwardPrimer,ReversePrimer",
+     br, 
+     "NAME,forwardPrimer,ReversePrimer",
+     br,br, 
+     "Example:",
+     br,
+     "StudentA|751_ZM_mMutator_54,gcagatcctgatgcagttca,gcctcagaactcctgttgct",
+     br,br,
         textarea(-name=>'primerSets',-rows=>15,-cols=>90),
 
     br,
         #end textbox
     br,
-    "<u>Organism</u>: ( maize or rice only)", "&nbsp;",
+    "<u>Organism</u>: ( maize or rice only)",br,
 
          radio_group(-name=>'organism', -value=>{maize=>'Zea mays(corn)',rice=>'Oryza sativa ssp nipponbare(rice)'},-linebreak=>'true',-default=>'maize'),
 
     br,
     br,
-        "<u>Primers for Genomic or cDNA</u> ",
-        "&nbsp;",
-        "&nbsp;",
+        "<u>Primers for Genomic or cDNA</u> ",br,
          radio_group(-name=>'type', -value=>{genomic=>'Genomic',cDNA=>'cDNA'},-linebreak=>'true',-default=>'genomic'),
-        "&nbsp;",
+        br,
     submit(-name=>'primer3', -value=>'Check Primers'),
     end_form,
     end_html;
@@ -52,11 +56,12 @@ if ( param ){
     my $organism = param('organism');
     my $type = param('type'); 
     my @primerSets = split /\n/ , $primerSets;
-my $db_dir = "/rhome/project/robb/maize_mites/FALL2013/primers/dbs/$organism";    ## genome file
+my $db_dir = "dbs/$organism";    ## genome file
 my %exons;
 ##transcript_exons_info.txt
 open EXONS, "$db_dir/transcript_exons_info.txt"
   or die "Can't open exon info file: transcript_exons_info.txt\n";
+if ($type eq 'cDNA'){
 while ( my $line = <EXONS> ) {
   chomp $line;
   my ( $t_name, $ref, $t_coord, $e_coords ) = split /\t/, $line;
@@ -72,27 +77,28 @@ while ( my $line = <EXONS> ) {
     push @{ $exons{$ref}{$first_digit}{$t_s}{$t_name}{exons} }, [ $e_s, $e_e ];
   }
 }
- my $time = time();
-open GBROWSE, ">$time.forBrowser.txt"
-  or die "Can't Open $time.forBrowser\n";
-print GBROWSE "[primers]
+}
+my $time = time();
+#open GBROWSE, ">$time.forBrowser.txt"
+#  or die "Can't Open $time.forBrowser\n";
+my @GBROWSE =("[primers]
 glyph = segments
 feature = primers
-\n\n";
+\n\n");
 open FASTA,   ">$time.fa" or die "Can't Open $time.fa\n";
 
 my %primers;
 my ( $id, $p1, $p2 );
-print "inputed primer sets
-==========================================\n";
+print "Inputed primer sets:" , br;
+  my @rows;
   foreach my $line( @primerSets ) {
     next if $line =~ /^#/;
     next if $line =~ /^\s*$/;
-    ( $id, $p1, $p2 ) = split /\t/, $line;
+    ( $id, $p1, $p2 ) = split /,/, $line;
     $id =~ s/\s+//g;
     $p1 =~ s/\s+//g;
     $p2 =~ s/\s+//g;
-    print "$id,$p1,$p2\n";
+    push @rows ,Tr( td( [$id, $p1, $p2] ) );
 
     $primers{$id}{p1}{seq} = $p1;
     $primers{$id}{p2}{seq} = $p2;
@@ -101,28 +107,30 @@ print "inputed primer sets
     print FASTA ">$id", "_p1\n$p1\n";
     print FASTA ">$id", "_p2\n$p2\n";
   }
+print table
+  ( 
+    {-border=>1}, 
+    Tr (  th( ['id', 'p1', 'p2'] ) ),
+    @rows,
+   );
+print br,hr,br;
 
-#print "\nGood Blat hits: No mismatches: Full Primer Length
-#==========================================\n";
-#   print
-#     "qName\tqLen\ttName\ttStart\ttEnd\tstrand\tmatches\tmismatches\n";
 ############ RUN BLAT ################
 my @db_files = <$db_dir/*fasta>;
 
-#print "db:$db_dir:@db_files\n";
 my $count = 0;
-`rm $time.blatout` if -e "$time.blatout";
+unlink "$time.blatout" if -e "$time.blatout";
 foreach my $db (@db_files) {
-
-  #   print "blat against $db\n";
-`blat -noHead -tileSize=7 -minScore=10 $db $time.fa $time.$count.blatout`;
+  unlink "$time.$count.blatout" if -e "$time.$count.blatout";
+  print "Searching against $db" , br;
+  `/usr/local/bin/blat -noHead -tileSize=7 -minScore=10 $db $time.fa $time.$count.blatout`;
   `cat $time.$count.blatout >> $time.blatout`;
-  `rm -f $time.*.blatout`;
+  unlink "$time.$count.blatout";
   $count++;
 }
 
-#my @file_path = split '/', $blat_file;
-#my $file_name = pop @file_path;
+print br,hr,br;
+
 ##blat parser
 open INBLAT, "$time.blatout",
   or die "Please provide a blat output file\n";
@@ -156,12 +164,11 @@ while ( my $line = <INBLAT> ) {
   $primers{$id}{hit}{$tName}{$pair}{$tStart}{matches}    = $matches;
   $primers{$id}{hit}{$tName}{$pair}{$tStart}{mismatches} = $mismatches;
 }
-
-print "\nGood Primer Pairs with product Size
-==========================================\n";
+print "Good Primer Pairs with product Size",br;
 my %results;
 
-print "id\tproduct_size\ttName\tp1_range\tp2_range\n";
+my @result_rows = ( Tr ( th ["id","product_size","primerInfo","p1_range","p2_range"]));
+#my @result_rows = ( Tr ( th ["id","product_size","tName","p1_range","p2_range"]));
 foreach my $id ( sort keys %primers ) {
   foreach my $tName ( sort keys %{ $primers{$id}{hit} } ) {
     my $pairs_per_target = scalar keys %{ $primers{$id}{hit}{$tName} };
@@ -226,8 +233,10 @@ foreach my $id ( sort keys %primers ) {
             $results{$id}{$product_size}{gbrowse} =
               "primers\t$id($product_size)\t$tName:$p1_range_str,$p2_range_str";
           }
+          #$results{$id}{$product_size}{info} =
+#"$id\t$product_size\tp1|$p1_strand;p2|$p2_strand\t$tName:$p1_range_str\t$tName:$p2_range_str";
           $results{$id}{$product_size}{info} =
-"$id\t$product_size\tp1|$p1_strand;p2|$p2_strand\t$tName:$p1_range_str\t$tName:$p2_range_str";
+Tr ( td ( [$id , $product_size, "p1|$p1_strand;p2|$p2_strand","$tName:$p1_range_str","$tName:$p2_range_str"]));
           if ( $type eq 'cDNA' and $product_size < 10000 ) {
             my ($hit_first_digit) = $hit_start =~ /^(\d)/;
             my $last_start        = 0;
@@ -328,8 +337,10 @@ foreach my $id ( sort keys %primers ) {
                       $exon_p1_product_size +
                       $inner_exon_size +
                       $exon_p2_product_size;
+                    #$results{$id}{$product_size}{info} =
+#"$id\t$product_size|$cDNA_product_size\t$gene_name;$exon_score;p1|$p1_strand|$cDNA{$p1_exon}{p1};p2|$p2_strand|$cDNA{$p2_exon}{p2}\t$tName:$p1_range_str\t$tName:$p2_range_str";
                     $results{$id}{$product_size}{info} =
-"$id\t$product_size|$cDNA_product_size\t$gene_name;$exon_score;p1|$p1_strand|$cDNA{$p1_exon}{p1};p2|$p2_strand|$cDNA{$p2_exon}{p2}\t$tName:$p1_range_str\t$tName:$p2_range_str";
+Tr ( td ( [$id,"$product_size|$cDNA_product_size","$gene_name;$exon_score;p1|$p1_strand|$cDNA{$p1_exon}{p1};p2|$p2_strand|$cDNA{$p2_exon}{p2}","$tName:$p1_range_str","$tName:$p2_range_str"] ) );
                     if ( $p1_s > $p2_s ) {
                       $results{$id}{$product_size}{gbrowse} =
 "primers\t$id($product_size|$cDNA_product_size)\t$tName:$p2_range_str,$p1_range_str";
@@ -352,17 +363,27 @@ foreach my $id ( sort keys %primers ) {
 }
 foreach my $id ( sort keys %results ) {
   foreach my $product_size ( sort { $a <=> $b } keys %{ $results{$id} } ) {
-    print $results{$id}{$product_size}{info}, "\n";
-    print GBROWSE $results{$id}{$product_size}{gbrowse}, "\n";
+    push @result_rows,  $results{$id}{$product_size}{info};
+    #print $results{$id}{$product_size}{info}, "\n";
+    push @GBROWSE , $results{$id}{$product_size}{gbrowse};
   }
 }
 foreach my $id (sort keys %primers){
   my $good = $primers{$id}{p1}{good};
   if (!$good){
-    print "$id\tnoHits\n";
+    push @result_rows , Tr (td ( [ $id , 'noHits' , '' ,'' ,'']));
+    #print "$id\tnoHits\n";
   }
 }
+print table
+  (
+    {-border=>1},
+    @result_rows,
+   );
 
+print br,hr,"GBrowse Custom Track: ", br, pre(join ("\n",@GBROWSE));
+unlink "$time.blatout";
+unlink "$time.fa";
 
 }
 #####SUBROUTINES########
