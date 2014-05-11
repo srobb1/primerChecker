@@ -36,9 +36,9 @@ print
     br,
         #end textbox
     br,
-    "<u>Organism</u>: ( maize or rice only)",br,
+    "<u>Organism</u>: ",br,
 
-         radio_group(-name=>'organism', -value=>{maize=>'Zea mays(corn)',rice=>'Oryza sativa ssp nipponbare(rice)'},-linebreak=>'true',-default=>'maize'),
+         radio_group(-name=>'organism', -value=>{maize=>'Zea mays(corn)',rice=>'Oryza sativa ssp nipponbare(rice)',rice_bisulfide=>'Rice Bisulfide Loci',planaria=>'Schmidtea mediterranea(planaria:genomicOnly)'},-linebreak=>'true',-default=>'maize'),
 
     br,
     br,
@@ -61,9 +61,9 @@ if ( param ){
 my $db_dir = "dbs/$organism";    ## genome file
 my %exons;
 ##transcript_exons_info.txt
-open EXONS, "$db_dir/transcript_exons_info.txt"
-  or die "Can't open exon info file: transcript_exons_info.txt\n";
 if ($type eq 'cDNA'){
+open EXONS, "$db_dir/transcript_exons_info.txt"
+  or die "Can't open exon info file: transcript_exons_info.txt\n" if $type eq 'cDNA';
 while ( my $line = <EXONS> ) {
   chomp $line;
   my ( $t_name, $ref, $t_coord, $e_coords ) = split /\t/, $line;
@@ -80,25 +80,30 @@ while ( my $line = <EXONS> ) {
   }
 }
 }
-my $time = time();
+my $time = "tmp/".time();
 my @GBROWSE =("[primers]
 glyph = segments
 feature = primers
+key = Primers
 \n\n");
-open FASTA,   ">$time.fa" or die "Can't Open $time.fa\n";
+open FASTA,   ">$time.fa" or die "Can't Open $time.fa for writing\n";
 
 my %primers;
 my ( $id, $p1, $p2 );
 print h2("Submitted primer sets:") , br;
   my @rows;
+  my @rows2;
   foreach my $line( @primerSets ) {
     next if $line =~ /^#/;
     next if $line =~ /^\s*$/;
     ( $id, $p1, $p2 ) = split /,/, $line;
     $id =~ s/\s+//g;
+    $id =~ s/,//g;
     $p1 =~ s/\s+//g;
     $p2 =~ s/\s+//g;
     push @rows ,Tr( td( [$id, $p1, $p2] ) );
+    push @rows2 ,Tr( td( ["F|$id", $p1] ) );
+    push @rows2 ,Tr( td( ["R|$id", $p2] ) );
 
     $primers{$id}{p1}{seq} = $p1;
     $primers{$id}{p2}{seq} = $p2;
@@ -107,11 +112,16 @@ print h2("Submitted primer sets:") , br;
     print FASTA ">$id", "_p1\n$p1\n";
     print FASTA ">$id", "_p2\n$p2\n";
   }
-print table
+print  "Primer Sequences" ,table
   ( 
     {-border=>1}, 
     Tr (  th( ['id', 'p1', 'p2'] ) ),
     @rows,
+   ), br, "Format for Primer Order Form", br ,table
+  ( 
+    {-border=>1}, 
+    Tr (  th( ['id', 'primer seq'] ) ),
+    @rows2,
    );
 print br,hr;
 
@@ -123,7 +133,7 @@ unlink "$time.blatout" if -e "$time.blatout";
 foreach my $db (@db_files) {
   unlink "$time.$count.blatout" if -e "$time.$count.blatout";
   print "Searching against $db" , br;
-  `/usr/local/bin/blat -noHead -tileSize=7 -minScore=10 $db $time.fa $time.$count.blatout`;
+  `/usr/local/bin/blat -noHead -tileSize=6 -minScore=10 $db $time.fa $time.$count.blatout`;
   `cat $time.$count.blatout >> $time.blatout`;
   unlink "$time.$count.blatout";
   $count++;
