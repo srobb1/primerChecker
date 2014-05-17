@@ -38,7 +38,7 @@ print
     br,
     "<u>Organism</u>: ",br,
 
-         radio_group(-name=>'organism', -value=>{maize=>'Zea mays(corn)',rice=>'Oryza sativa ssp nipponbare(rice)',rice_bisulfide=>'Rice Bisulfide Loci',planaria=>'Schmidtea mediterranea(planaria:genomicOnly)'},-linebreak=>'true',-default=>'maize'),
+         radio_group(-name=>'organism', -value=>{maize=>'Zea mays(corn)',rice=>'Oryza sativa ssp nipponbare(rice)',rice_bisulfide=>'Rice Bisulfide Loci',planaria=>'Schmidtea mediterranea'},-linebreak=>'true',-default=>'maize'),
 
     br,
     br,
@@ -73,10 +73,9 @@ while ( my $line = <EXONS> ) {
   if ( $ref =~ /^\d/ ) {
     $ref = "chr$ref";
   }
-  $exons{$ref}{$first_digit}{$t_s}{$t_name}{end} = $t_e;
   foreach my $e_coord (@e_coords) {
     my ( $e_s, $e_e ) = split ',', $e_coord;
-    push @{ $exons{$ref}{$first_digit}{$t_s}{$t_name}{exons} }, [ $e_s, $e_e ];
+    push @{ $exons{$ref}{$t_s}{$t_e}{$t_name}{exons} }, [ $e_s, $e_e ];
   }
 }
 }
@@ -177,7 +176,6 @@ while ( my $line = <INBLAT> ) {
 my %results;
 
 my @result_rows = ( Tr ( th ["id","product_size","primerInfo","p1_range","p2_range"]));
-#my @result_rows = ( Tr ( th ["id","product_size","tName","p1_range","p2_range"]));
 foreach my $id ( sort keys %primers ) {
   foreach my $tName ( sort keys %{ $primers{$id}{hit} } ) {
     my $pairs_per_target = scalar keys %{ $primers{$id}{hit}{$tName} };
@@ -242,126 +240,115 @@ foreach my $id ( sort keys %primers ) {
             $results{$id}{$product_size}{gbrowse} =
               "primers\t$id($product_size)\t$tName:$p1_range_str,$p2_range_str";
           }
-          #$results{$id}{$product_size}{info} =
-#"$id\t$product_size\tp1|$p1_strand;p2|$p2_strand\t$tName:$p1_range_str\t$tName:$p2_range_str";
           $results{$id}{$product_size}{info} =
 Tr ( td ( [$id , $product_size, "p1|$p1_strand;p2|$p2_strand","$tName:$p1_range_str","$tName:$p2_range_str"]));
-          if ( $type eq 'cDNA' and $product_size < 10000 ) {
+          if ( $type eq 'cDNA' and $product_size < 20000 ) {
+            my $ref = $tName;
             my ($hit_first_digit) = $hit_start =~ /^(\d)/;
-            my $last_start        = 0;
             my $done              = 0;
-            foreach my $gene_start (
-              sort { $a <=> $b }
-              keys %{ $exons{$tName}{$hit_first_digit} }
-              )
-            {
-              if ( $hit_start <= $gene_start ) {
-                foreach my $gene_name (
-                  sort keys %{ $exons{$tName}{$hit_first_digit}{$last_start} } )
-                {
-                  my $gene_end =
-                    $exons{$tName}{$hit_first_digit}{$last_start}{$gene_name}
-                    {end};
-                  if ( $hit_end <= $gene_end ) {
-                    $done = 1;
-                    my @exon_ranges =
-                      @{ $exons{$tName}{$hit_first_digit}{$last_start}
-                        {$gene_name}{exons} };
-                    my %cDNA;
-                    my $exon_count = 0;
-                    ## pre-ordered smallest to biggest in ref
-                    foreach my $exon_range (@exon_ranges) {
-                      my $p1_len = length $primers{$id}{p1}{seq};
-                      my $p2_len = length $primers{$id}{p2}{seq};
-                      my $p1_info =
+            foreach my $gene_start (sort { $a <=> $b } keys %{ $exons{$ref} }){ 
+              foreach my $gene_end (sort {$a <=> $b}keys %{ $exons{$ref}{$gene_start} } ){
+                 if ($gene_start <= $hit_start and $gene_end >= $hit_end){
+                   foreach my $gene_name ( sort keys %{ $exons{$ref}{$gene_start}{$gene_end} } ){
+                      my @exon_ranges = @{ $exons{$tName}{$gene_start}{$gene_end}{$gene_name}{exons} };
+                      my %cDNA;
+                      my $exon_count = 0;
+                      ## pre-ordered smallest to biggest in ref
+                      foreach my $exon_range (@exon_ranges) {
+                        my $p1_len = length $primers{$id}{p1}{seq};
+                        my $p2_len = length $primers{$id}{p2}{seq};
+                        my $p1_info =
                         getExonInfo( $p1_len, $exon_range, $p1_range );
-                      my $p2_info =
+                        my $p2_info =
                         getExonInfo( $p2_len, $exon_range, $p2_range );
-                      my $exon_size =
+                        my $exon_size =
                         range_get_end($exon_range) -
                         range_get_start($exon_range) + 1;
 
-                      $cDNA{$exon_count}{size}  = $exon_size;
-                      $cDNA{$exon_count}{range} = $exon_range;
-                      $cDNA{$exon_count}{p1}    = $p1_info;
-                      $cDNA{$exon_count}{p2}    = $p2_info;
-                      $exon_count++;
-                    }
-                    my $exon_p1_product_size = 0;
-                    my $exon_p2_product_size = 0;
-                    my $p1_exon;
-                    my $p2_exon;
-                    my $exon_score;
-                    foreach my $exon ( sort { $a <=> $b } keys %cDNA ) {
-                      next
-                        if !exists $cDNA{$exon}{p1}
-                          and !exists $cDNA{$exon}{p2};
-                      my $exon_size  = $cDNA{$exon}{size};
-                      my $exon_range = $cDNA{$exon}{range};
-                      if ( $cDNA{$exon}{p1}) {
-                        $p1_exon = $exon;
-                        $exon_score+=$cDNA{$exon}{p1};
-                        if ( $p1_s < $p2_s ) {
-                          $exon_p1_product_size =
-                            range_get_end($exon_range) - $p1_s + 1;
+                        $cDNA{$exon_count}{size}  = $exon_size;
+                        $cDNA{$exon_count}{range} = $exon_range;
+                        $cDNA{$exon_count}{p1}    = $p1_info;
+                        $cDNA{$exon_count}{p2}    = $p2_info;
+                        $exon_count++;
+                      }
+                      my $exon_p1_product_size = 0;
+                      my $exon_p2_product_size = 0;
+                      my $p1_exon;
+                      my $p2_exon;
+                      my $exon_score;
+                      foreach my $exon ( sort { $a <=> $b } keys %cDNA ) {
+                        next if !exists $cDNA{$exon}{p1} and !exists $cDNA{$exon}{p2};
+                        my $exon_size  = $cDNA{$exon}{size};
+                        my $exon_range = $cDNA{$exon}{range};
+                        if ( $cDNA{$exon}{p1}) {
+                          $p1_exon = $exon;
+                          $exon_score+=$cDNA{$exon}{p1};
+                          if ( $p1_s < $p2_s ) {
+                            $exon_p1_product_size =
+                              range_get_end($exon_range) - $p1_s + 1;
+                          }
+                          else {
+                            $exon_p1_product_size =
+                               $p1_e - range_get_start($exon_range) + 1;
+                          }
                         }
-                        else {
-                          $exon_p1_product_size =
-                            $p1_e - range_get_start($exon_range) + 1;
+                        if ( $cDNA{$exon}{p2}) {
+                          $exon_score+=$cDNA{$exon}{p2};
+                          $p2_exon = $exon;
+                          if ( $p1_s < $p2_s ) {
+                            $exon_p2_product_size =
+                              $p2_e - range_get_start($exon_range) + 1;
+                          }
+                          else {
+                            $exon_p2_product_size =
+                              range_get_end($exon_range) - $p2_s + 1;
+                          }
                         }
                       }
-                      elsif ( $cDNA{$exon}{p2}) {
-                        $exon_score+=$cDNA{$exon}{p2};
-                        $p2_exon = $exon;
-                        if ( $p1_s < $p2_s ) {
-                          $exon_p2_product_size =
-                            $p2_e - range_get_start($exon_range) + 1;
-                        }
-                        else {
-                          $exon_p2_product_size =
-                            range_get_end($exon_range) - $p2_s + 1;
-                        }
-                      }
-                    }
-                    my $inner_exon_size = 0;
-                    my @sorted_exons    = ( $p1_exon, $p2_exon );
-                    my $smallest        = 'p1';
-                    next if !defined $p1_exon or !defined $p2_exon;
-                    if ( $p1_exon > $p2_exon ) {
-                      @sorted_exons = ( $p2_exon, $p1_exon );
-                      $smallest = 'p2';
-                    }
-                    if ( ( $sorted_exons[1] - $sorted_exons[0] ) > 1 ) {
-                      for (
-                        my $i = $sorted_exons[0] + 1 ;
-                        $i < $sorted_exons[1] ;
-                        $i++
-                        )
-                      {
-                        $inner_exon_size += $cDNA{$i}{size};
-                      }
-                    }
+                      my $inner_exon_size = 0;
+                      my @sorted_exons    = ( $p1_exon, $p2_exon );
+                      my $smallest        = 'p1';
+                      next if !defined $p1_exon or !defined $p2_exon;
+                      $done = 1;
 
-                    my $cDNA_product_size =
-                      $exon_p1_product_size +
-                      $inner_exon_size +
-                      $exon_p2_product_size;
-                    #$results{$id}{$product_size}{info} =
-#"$id\t$product_size|$cDNA_product_size\t$gene_name;$exon_score;p1|$p1_strand|$cDNA{$p1_exon}{p1};p2|$p2_strand|$cDNA{$p2_exon}{p2}\t$tName:$p1_range_str\t$tName:$p2_range_str";
-                    $results{$id}{$product_size}{info} =
+                      my $cDNA_product_size;
+                      if ($p1_exon == $p2_exon){
+                        $cDNA_product_size = $product_size;
+                      }else{
+                      if ( $p1_exon > $p2_exon ) {
+                        @sorted_exons = ( $p2_exon, $p1_exon );
+                        $smallest = 'p2';
+                      }
+                      if ( ( $sorted_exons[1] - $sorted_exons[0] ) > 1 ) {
+                        for (
+                          my $i = $sorted_exons[0] + 1 ;
+                          $i < $sorted_exons[1] ;
+                          $i++
+                          )
+                        {
+                          $inner_exon_size += $cDNA{$i}{size};
+                        }
+                      }
+                      
+                      $cDNA_product_size =
+                        $exon_p1_product_size +
+                        $inner_exon_size +
+                        $exon_p2_product_size;
+                      }
+                      $results{$id}{$product_size}{info} =
 Tr ( td ( [$id,"$product_size|$cDNA_product_size","$gene_name;$exon_score;p1|$p1_strand|$cDNA{$p1_exon}{p1};p2|$p2_strand|$cDNA{$p2_exon}{p2}","$tName:$p1_range_str","$tName:$p2_range_str"] ) );
-                    if ( $p1_s > $p2_s ) {
+                      if ( $p1_s > $p2_s ) {
                       $results{$id}{$product_size}{gbrowse} =
 "primers\t$id($product_size|$cDNA_product_size)\t$tName:$p2_range_str,$p1_range_str";
-                    }
-                    else {
-                      $results{$id}{$product_size}{gbrowse} =
+                      }
+                      else {
+                        $results{$id}{$product_size}{gbrowse} =
 "primers\t$id($product_size|$cDNA_product_size)\t$tName:$p1_range_str,$p2_range_str";
+                      }
                     }
                   }
-                }
+                last if $done;
               }
-              $last_start = $gene_start;
               last if $done;
             }
           }
