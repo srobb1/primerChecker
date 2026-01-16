@@ -5,7 +5,7 @@ use File::Spec;
 use Getopt::Long;
 #use Tie::File;
 
-if ( !defined @ARGV ) {
+if ( !@ARGV ) {
   &getHelp();
 }
 my ( $organism, $primersFile, $type, $format );
@@ -23,53 +23,96 @@ usage:
 ./primerChecker.pl [-o organism][-f primerFile][-t type (1|2)][-i inputFormat (1|2)][-h] 
 
 options:
--o | --organism		string		rice,maize
+-o | --organism		string		rice,maize (directory name in db/CCA3H1)
 -f | --primersFile      file		file with primer id and sequences 
--t | --type		int		[1 or 2]; 1=Genomic; 2=cDNA
+-t | --type		int		[1 or 2]; DNA template must be 1=Genomic or 2=cDNA
 -i | --format		int		[1 or 2]; 1=l line with both primers; 2=2 lines, 1 for each primers
 -h | --help				this help message
 
+Primer file format:
+==================
+format=1 for 1 line for each primer set: CommonName\tseq1\tseq2\n
+foramt=2 for 2 lines for each primer set: Primer1Name\tseq1\nPrimer2Name\tseq1\n
 
-## format=1 for 1 line for each primer set: CommonName\tseq1\tseq2\n
-## foramt=2 for 2 lines for each primer set: Primer1Name\tseq1\nPrimer2Name\tseq1\n
+Template type:
+=============
+if you select 1 for genomic DNA PCR template the product sizes will include the size of the introns
+if you select 2 for cDNA PCR template the product sizes will not include the size of the introns  
 
+Example Output Format Genomic:
+======================
+col1:primer_id -> h1SMcT0000422.1_primer_1
+col2:PCR_template_type -> genomic
+col3:product_size -> 1780
+col4:hit_name -> 1_h1 
+col5:p1_strand -> +
+col6:p1_size -> 20 
+col7:p1_seq -> CTGACGTGGCGTAAAATATG
+col8:p1_alignment_desc -> primer_fully_contained_in_genomic_sequence
+col9:p1_coordinates -> 1_h1:14962393..14962412
+col10:p2_strand -> +
+col11:p2_size -> 20
+col12:p2_seq -> CGCAACTCTGTTGAATGTAC
+col13:p2_alignment_desc -> primer_fully_contained_in_genomic_sequence
+col14:p2_coordinates -> 1_h1:14964153..14964172 
+
+Example Output Format cDNA:
+======================
+col1:primer_id -> h1SMcT0000422.1_primer_1
+col2:PCR_template_type -> cDNA
+col3:product_size -> 495
+col4:hit_name -> h1SMcT0000422.1
+col5:p1_strand -> +
+col6:p1_size -> 20
+col7:p1_seq -> CTGACGTGGCGTAAAATATG
+col8:p1_alignment_desc -> primer_fully_contained_in_exon:0
+col9:p1_coordinates -> 1_h1:14962393..14962412
+col10:p2_strand -> +
+col11:p2_size -> 20
+col12:p2_seq -> CGCAACTCTGTTGAATGTAC
+col13:p2_alignment_desc -> primer_fully_contained_in_exon:3
+col14:p2_coordinates -> 1_h1:14964153..14964172
 ';
   exit 1;
 }
 $type = $type eq 1 ? 'genomic' : 'cDNA';
-my $db_dir = "dbs/$organism";    ## genome file
+my $db_dir = "/n/projects/smr/primerChecker/dbs/$organism";    ## genome file
 my %exons;
 ##transcript_exons_info.txt
-open EXONS, "$db_dir/transcript_exons_info.txt"
-  or die "Can't open exon info file: transcript_exons_info.txt\n";
-while ( my $line = <EXONS> ) {
-  chomp $line;
-  my ( $t_name, $ref, $t_coord, $e_coords ) = split /\t/, $line;
-  my @e_coords = split ';', $e_coords;
-  my ($first_digit) = $t_coord =~ /^(\d)/;
-  my ( $t_s, $t_e ) = split ',', $t_coord;
-  if ( $ref =~ /^\d/ ) {
-    $ref = "chr$ref";
-  }
-  $exons{$ref}{$first_digit}{$t_s}{$t_name}{end} = $t_e;
-  foreach my $e_coord (@e_coords) {
-    my ( $e_s, $e_e ) = split ',', $e_coord;
-    push @{ $exons{$ref}{$first_digit}{$t_s}{$t_name}{exons} }, [ $e_s, $e_e ];
+##h1SMcT0000008.1 1_h1  + 370155,371723 370155,370254;370300,370489;370549,370868;370924,371279;371333,371723
+if ($type eq 'cDNA'){
+  open EXONS, "$db_dir/transcript_exons_info.txt"
+    or die "Can't open exon info file: transcript_exons_info.txt\n";
+  while ( my $line = <EXONS> ) {
+    chomp $line;
+    my ( $t_name, $ref, $strand, $t_coord, $e_coords ) = split /\t/, $line;
+    my @e_coords = split ';', $e_coords;
+    my ($first_digit) = $t_coord =~ /^(\d)/;
+    my ( $t_s, $t_e ) = split ',', $t_coord;
+    if ( $ref =~ /^\d+$/ ) {
+      $ref = "chr$ref";
+    }
+    $exons{$ref}{$first_digit}{$t_s}{$t_name}{end} = $t_e;
+    foreach my $e_coord (@e_coords) {
+      my ( $e_s, $e_e ) = split ',', $e_coord;
+      push @{ $exons{$ref}{$first_digit}{$t_s}{$t_name}{exons} }, [ $e_s, $e_e ];
+    }
   }
 }
 
-open GBROWSE, ">$primersFile.forBrowser.txt"
-  or die "Can't Open $primersFile.forBrowser\n";
-print GBROWSE "[primers]
-glyph = segments
-feature = primers
-\n\n";
+#open GBROWSE, ">$primersFile.forBrowser.txt"
+#  or die "Can't Open $primersFile.forBrowser\n";
+#print GBROWSE "[primers]
+#glyph = segments
+#feature = primers
+#\n\n";
 open PRIMERS, $primersFile       or die "Can't Open $primersFile\n";
 open FASTA,   ">$primersFile.fa" or die "Can't Open $primersFile.fa\n";
+open RESULTS,   ">$primersFile.results.xls" or die "Can't Open $primersFile.fa\n";
 
 my %primers;
 my ( $id, $p1, $p2 );
-print "inputed primer sets
+print "Submitted primer sets:
 ==========================================\n";
 if ( $format == 1 ) {
   while ( my $line = <PRIMERS> ) {
@@ -136,11 +179,11 @@ my @db_files = <$db_dir/*fasta>;
 my $count = 0;
 `rm $primersFile.blatout` if -e "$primersFile.blatout";
 foreach my $db (@db_files) {
-
+  print "blat -noHead -tileSize=7 -minScore=10 $db $primersFile.fa $primersFile.$count.blatout\n";
   #   print "blat against $db\n";
 `blat -noHead -tileSize=7 -minScore=10 $db $primersFile.fa $primersFile.$count.blatout`;
   `cat $primersFile.$count.blatout >> $primersFile.blatout`;
-  `rm -f $primersFile.*.blatout`;
+#  `rm -f $primersFile.*.blatout`;
   $count++;
 }
 
@@ -149,7 +192,7 @@ foreach my $db (@db_files) {
 ##blat parser
 open INBLAT, "$primersFile.blatout",
   or die "Please provide a blat output file\n";
-
+my %bad;
 while ( my $line = <INBLAT> ) {
   my @line        = split /\t/, $line;
   my $matches     = $line[0];
@@ -165,10 +208,19 @@ while ( my $line = <INBLAT> ) {
   my $tEnd        = $line[16];
   my $aln_bp      = $matches + $qBaseInsert + $mismatches;
 
+  my $bad = 0;
   ## throw out if alignment is too small
-  next if ( $matches + $mismatches ) < $qLen;
+  if (( $matches + $mismatches ) < $qLen){
+
+    $bad{$id}{"$tName:$tStart..$tEnd"}{short_alignment_by} =  $qLen - ( $matches + $mismatches );
+    $bad++;
+  }
   ## throw out if there are too many MM
-  next if $mismatches > 0;
+  if ($mismatches > 0){
+    $bad{$id}{"$tName:$tStart..$tEnd"}{has_mismatches}=$mismatches;
+    $bad++;
+  }
+  next if $bad;
   my $id = $qName;
   $id =~ s/_(p\d+)//;
   my ($pair) = $qName =~ /_(p\d)$/;
@@ -180,15 +232,22 @@ while ( my $line = <INBLAT> ) {
   $primers{$id}{hit}{$tName}{$pair}{$tStart}{mismatches} = $mismatches;
 }
 
-print "\nGood Primer Pairs with product Size
+print "\nGood Primer Pairs with product Size printed to this file: $primersFile.results.tsv
 ==========================================\n";
 my %results;
 
-print "id\tproduct_size\ttName\tp1_range\tp2_range\n";
+print RESULTS "primer_id\tPCR_template_type\tproduct_size\thit_name\tp1_strand\tp1_length\tp1_seq\tp1_alignment_desc\tp1_coordinates\tp2_strand\tp2_length\tp2_seq\tp2_alignment_desc\tp2_coordinates\n";
+print "primer_id\tPCR_template_type\tproduct_size\thit_name\tp1_strand\tp1_length\tp1_seq\tp1_alignment_desc\tp1_coordinates\tp2_strand\tp2_length\tp2_seq\tp2_alignment_desc\tp2_coordinates\n";
 foreach my $id ( sort keys %primers ) {
   foreach my $tName ( sort keys %{ $primers{$id}{hit} } ) {
+    my $bad = 0;
     my $pairs_per_target = scalar keys %{ $primers{$id}{hit}{$tName} };
-    next if $pairs_per_target < 2;
+    # we should have 1 alignment per each primer (p1 and p2) per target
+    if ($pairs_per_target != 2){
+      $bad{$id}{$tName}{not_two_primer_alignements_per_target}=$pairs_per_target;
+      $bad++;
+    }
+    next if $bad;
     my %hits;
     foreach my $pair ( sort keys %{ $primers{$id}{hit}{$tName} } ) {
       foreach my $tStart (
@@ -204,7 +263,12 @@ foreach my $id ( sort keys %primers ) {
       }
     }
     ## next if we dont have hits on both strands
-    next if keys %hits < 2;
+    if (keys %hits < 2){
+      my @strands = keys %hits;
+      $bad{$id}{$tName}{primer_pairs_only_on_one_strand}=$strands[0];
+      $bad++;
+    }
+    next if $bad;
     my %pairs;    ## pairs
     foreach my $strand (%hits) {
       foreach my $p ( keys %{ $hits{$strand} } ) {
@@ -249,35 +313,29 @@ foreach my $id ( sort keys %primers ) {
             $results{$id}{$product_size}{gbrowse} =
               "primers\t$id($product_size)\t$tName:$p1_range_str,$p2_range_str";
           }
-          $results{$id}{$product_size}{info} =
-"$id\t$product_size\tp1|$p1_strand;p2|$p2_strand\t$tName:$p1_range_str\t$tName:$p2_range_str";
-          if ( $type eq 'cDNA' and $product_size < 10000 ) {
+          
+          $results{$id}{$product_size}{info} = join ("\t",($id,$type,$product_size,$tName,$p1_strand,length($primers{$id}{p1}{seq}),$primers{$id}{p1}{seq},"primer_fully_contained_in_genomic_sequence","$tName:$p1_range_str",$p2_strand,length($primers{$id}{p2}{seq}),$primers{$id}{p2}{seq},"primer_fully_contained_in_genomic_sequence","$tName:$p2_range_str"));
+          if ( $type eq 'cDNA' and $product_size < 40000 ) {
             my ($hit_first_digit) = $hit_start =~ /^(\d)/;
             my $last_start        = 0;
             my $done              = 0;
-            foreach my $gene_start (
-              sort { $a <=> $b }
-              keys %{ $exons{$tName}{$hit_first_digit} }
-              )
-            {
+            foreach my $gene_start (sort { $a <=> $b } keys %{ $exons{$tName}{$hit_first_digit} }){
               if ( $hit_start <= $gene_start ) {
-                foreach my $gene_name (
-                  sort keys %{ $exons{$tName}{$hit_first_digit}{$last_start} } )
-                {
-                  my $gene_end =
-                    $exons{$tName}{$hit_first_digit}{$last_start}{$gene_name}
-                    {end};
+                foreach my $gene_name (sort keys %{ $exons{$tName}{$hit_first_digit}{$last_start} } ){
+                  my $gene_end = $exons{$tName}{$hit_first_digit}{$last_start}{$gene_name}{end};
                   if ( $hit_end <= $gene_end ) {
                     $done = 1;
                     my @exon_ranges =
-                      @{ $exons{$tName}{$hit_first_digit}{$last_start}
-                        {$gene_name}{exons} };
+                      @{ $exons{$tName}{$hit_first_digit}{$last_start}{$gene_name}{exons} };
                     my %cDNA;
                     my $exon_count = 0;
                     ## pre-ordered smallest to biggest in ref
                     foreach my $exon_range (@exon_ranges) {
                       my $p1_len = length $primers{$id}{p1}{seq};
                       my $p2_len = length $primers{$id}{p2}{seq};
+                      # 1   = primer totally contained in a single exon
+                      # 0.5 = primer paritally contained in more than one single exon
+                      # 0   = primer not found in exon
                       my $p1_info =
                         getExonInfo( $p1_len, $exon_range, $p1_range );
                       my $p2_info =
@@ -294,9 +352,11 @@ foreach my $id ( sort keys %primers ) {
                     }
                     my $exon_p1_product_size = 0;
                     my $exon_p2_product_size = 0;
+                    my $exon_product_size = 0;
                     my $p1_exon;
                     my $p2_exon;
                     my $exon_score;
+                    my %exon_coverage;
                     foreach my $exon ( sort { $a <=> $b } keys %cDNA ) {
                       next
                         if !exists $cDNA{$exon}{p1}
@@ -304,8 +364,15 @@ foreach my $id ( sort keys %primers ) {
                       my $exon_size  = $cDNA{$exon}{size};
                       my $exon_range = $cDNA{$exon}{range};
                       if ( $cDNA{$exon}{p1}) {
-                        $p1_exon = $exon;
+                        $p1_exon = $exon; ## exon count 0,1,2,3
                         $exon_score+=$cDNA{$exon}{p1};
+                        if ($cDNA{$exon}{p1} == 1){
+                          $exon_coverage{p1}{$exon}="primer_fully_contained_in_exon";
+                        }elsif ($cDNA{$exon}{p1} == 0.5){
+                           $exon_coverage{p1}{$exon}="primer_partially_contained_in_exon";
+                        }elsif ($cDNA{$exon}{p1} == 0){
+                           $exon_coverage{p1}{$exon}="primer_not_contained_in_exon";
+                        }
                         if ( $p1_s < $p2_s ) {
                           $exon_p1_product_size =
                             range_get_end($exon_range) - $p1_s + 1;
@@ -315,8 +382,15 @@ foreach my $id ( sort keys %primers ) {
                             $p1_e - range_get_start($exon_range) + 1;
                         }
                       }
-                      elsif ( $cDNA{$exon}{p2}) {
-                        $exon_score+=$cDNA{$exon}{p2};
+                      if ( $cDNA{$exon}{p2}) {
+                       if ($cDNA{$exon}{p2} == 1){
+                          $exon_coverage{p2}{$exon}="primer_fully_contained_in_exon";
+                        }elsif ($cDNA{$exon}{p2} == 0.5){
+                           $exon_coverage{p2}{$exon}="primer_partially_contained_in_exon";
+                        }elsif ($cDNA{$exon}{p2} == 0){
+                           $exon_coverage{p2}{$exon}="primer_not_contained_in_exon";
+                        }
+												$exon_score+=$cDNA{$exon}{p2};
                         $p2_exon = $exon;
                         if ( $p1_s < $p2_s ) {
                           $exon_p2_product_size =
@@ -326,6 +400,13 @@ foreach my $id ( sort keys %primers ) {
                           $exon_p2_product_size =
                             range_get_end($exon_range) - $p2_s + 1;
                         }
+                      }
+                      # if p1 and p2 are within the same exon
+                      if ($exon_coverage{p1}{$exon} eq "primer_fully_contained_in_exon" and $exon_coverage{p2}{$exon} eq "primer_fully_contained_in_exon"){
+                        my @sorted_coords = sort { $a <=> $b } ( $p1_s, $p1_e, $p2_s, $p2_e );
+                        my $product_start = shift @sorted_coords;
+                        my $product_end = pop @sorted_coords;
+                        $exon_product_size = $product_end - $product_start + 1; 
                       }
                     }
                     my $inner_exon_size = 0;
@@ -347,12 +428,28 @@ foreach my $id ( sort keys %primers ) {
                       }
                     }
 
+                 
                     my $cDNA_product_size =
                       $exon_p1_product_size +
                       $inner_exon_size +
                       $exon_p2_product_size;
-                    $results{$id}{$product_size}{info} =
-"$id\t$product_size|$cDNA_product_size\t$gene_name;$exon_score;p1|$p1_strand|$cDNA{$p1_exon}{p1};p2|$p2_strand|$cDNA{$p2_exon}{p2}\t$tName:$p1_range_str\t$tName:$p2_range_str";
+                     my @p1_exon_coverage;
+                     my @p2_exon_coverage;
+                     foreach my $exon_count (sort {$a <=> $b} keys %{$exon_coverage{p1}}){
+                        my $desc = $exon_coverage{p1}{$exon_count};
+                        push @p1_exon_coverage, "$desc:$exon_count";
+                     }
+                     foreach my $exon_count (sort {$a <=> $b} keys %{$exon_coverage{p2}}){
+                        my $desc = $exon_coverage{p2}{$exon_count};
+                        push @p2_exon_coverage, "$desc:$exon_count";
+                     }
+                     my $p1_exon_coverage = join(";",@p1_exon_coverage);
+                     my $p2_exon_coverage = join(";",@p2_exon_coverage);
+                     if($exon_product_size > 0){
+                        $cDNA_product_size = $exon_product_size;
+                     }
+                    $results{$id}{$product_size}{info} = join ("\t",($id,$type,"$cDNA_product_size|$product_size",$gene_name,$p1_strand,length($primers{$id}{p1}{seq}),$primers{$id}{p1}{seq},$p1_exon_coverage,"$tName:$p1_range_str",$p2_strand,length($primers{$id}{p2}{seq}),$primers{$id}{p2}{seq},$p2_exon_coverage,"$tName:$p2_range_str"));
+#"$id\t$product_size|$cDNA_product_size\t$gene_name;$exon_score;p1|$p1_strand|$cDNA{$p1_exon}{p1};p2|$p2_strand|$cDNA{$p2_exon}{p2}\t$tName:$p1_range_str\t$tName:$p2_range_str";
                     if ( $p1_s > $p2_s ) {
                       $results{$id}{$product_size}{gbrowse} =
 "primers\t$id($product_size|$cDNA_product_size)\t$tName:$p2_range_str,$p1_range_str";
@@ -375,8 +472,9 @@ foreach my $id ( sort keys %primers ) {
 }
 foreach my $id ( sort keys %results ) {
   foreach my $product_size ( sort { $a <=> $b } keys %{ $results{$id} } ) {
+    print RESULTS $results{$id}{$product_size}{info}, "\n";
     print $results{$id}{$product_size}{info}, "\n";
-    print GBROWSE $results{$id}{$product_size}{gbrowse}, "\n";
+    #print GBROWSE $results{$id}{$product_size}{gbrowse}, "\n";
   }
 }
 foreach my $id (sort keys %primers){
@@ -385,6 +483,21 @@ foreach my $id (sort keys %primers){
     print "$id\tnoHits\n";
   }
 }
+#print Dumper \%bad;
+if (keys %bad){
+  print "\n\nSuboptimal Primer hits\n";
+  print "=======================\n";
+  print join("\t","primer_pair_id","primer_pair_hit_coords","status","value"),"\n";
+  foreach my $id (sort keys %bad){
+    foreach my $coord (sort keys %{$bad{$id}}){
+      foreach my $status (sort keys %{$bad{$id}{$coord}}){
+        my $value = $bad{$id}{$coord}{$status};
+        print join("\t",$id,$coord,$status,$value),"\n";
+      }
+    }
+  }
+}
+
 
 #####SUBROUTINES########
 sub getExonInfo {
@@ -397,6 +510,7 @@ sub getExonInfo {
     ## primer completely within 1 exon
     return 1;
   }
+  # overlap of primer with exon is more than 0 but less than p_len
   elsif ( $overlap > 0 ) {
     ## primer overlap junction, in more than 1 exon
     return 0.5;
