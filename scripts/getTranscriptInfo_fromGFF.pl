@@ -24,6 +24,7 @@ while (my $line = <GFF>){
     my ($name) = $nine =~ /Name=([^;]+)/;
     if (!defined $name){
       print "WARNING: NO NAME: $line\n";
+      $name = $id;
     }
     $genes{$ref}{$id}{name}=$name;
     $genes{$ref}{$id}{start}=$start;
