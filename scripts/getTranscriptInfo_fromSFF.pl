@@ -29,6 +29,7 @@ my %exons;
 open OUTEXONS, ">transcript_exons_info.txt" or die "Can't open transcript_exons_info.txt";
 foreach my $feature ( @features_type_gene ) {
   my $f_name  = $feature->name;
+  my $f_load_id  = $feature->load_id;
   my $f_start = $feature->start;
   my $f_end   = $feature->end;
   my $ref     = $feature->ref;
@@ -45,7 +46,7 @@ foreach my $feature ( @features_type_gene ) {
   foreach my $f (sort {$a->start <=> $b->start} @features_exons) {
     my %attr = $f->attributes;
     my $parent_id = ${$attr{parent_id}}[0];
-    next unless $parent_id eq $f_name; 
+    next unless $parent_id eq $f_load_id; 
     my $e_start = $f->start;
     my $e_end   = $f->end;
     push @exons, "$e_start,$e_end";

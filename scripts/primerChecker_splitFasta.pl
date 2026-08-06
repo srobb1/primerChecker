@@ -1,7 +1,7 @@
 #!/usr/bin/perl -w
 use strict;
 use Getopt::Long;
-if ( !defined @ARGV ) {
+if ( !@ARGV ) {
   &getHelp();
 }
 my $file ;

@@ -27,9 +27,9 @@ print
      br,br, 
      "Examples:",
      br,
-     "StudentA|751_ZM_mMutator_54,gcagatcctgatgcagttca,gcctcagaactcctgttgct",
+     "smr_A01|751_ZM_mMutator_54,gcagatcctgatgcagttca,gcctcagaactcctgttgct",
      br,
-     "StudentB|17669_ZM_Tourist_245|Chr4:17287840..17288127,gcaatgagaggctcttggtc,aacaatgttggttggcttcc",
+     "smr_A02|17669_ZM_Tourist_245|Chr4:17287840..17288127,gcaatgagaggctcttggtc,aacaatgttggttggcttcc",
      br,br,
         textarea(-name=>'primerSets',-rows=>15,-cols=>90),
 
@@ -38,7 +38,8 @@ print
     br,
     "<u>Organism</u>: ",br,
 
-         radio_group(-name=>'organism', -value=>{maize=>'Zea mays(corn)',rice=>'Oryza sativa ssp nipponbare(rice)',rice_bisulfide=>'Rice Bisulfide Loci',planaria=>'Schmidtea mediterranea'},-linebreak=>'true',-default=>'maize'),
+         radio_group(-name=>'organism', -value=>{'schMedS3_h1'=>'Schmedita mediterranea Sexual (schMedS3_h1)'},-linebreak=>'true',-default=>'schMedS3_h1'),
+         #radio_group(-name=>'organism', -value=>{'SmedSxl_v3.1'=>'Schmedita mediterranea Sexual (v3.1)',rice=>'Oryza sativa ssp nipponbare(rice)',rice_bisulfide=>'Rice Bisulfide Loci',planaria=>'Schmidtea mediterranea'},-linebreak=>'true',-default=>'maize'),
 
     br,
     br,
@@ -51,33 +52,31 @@ print
 
 }
 if ( param ){
-    print header;
-    print start_html('Your Primer Results');
+  print header;
+  print start_html('Your Primer Results');
 
-    my $primerSets = param('primerSets');
-    my $organism = param('organism');
-    my $type = param('type'); 
-    my @primerSets = split /\n/ , $primerSets;
-my $db_dir = "dbs/$organism";    ## genome file
-my %exons;
-##transcript_exons_info.txt
-if ($type eq 'cDNA'){
-open EXONS, "$db_dir/transcript_exons_info.txt"
-  or die "Can't open exon info file: transcript_exons_info.txt\n" if $type eq 'cDNA';
-while ( my $line = <EXONS> ) {
-  chomp $line;
-  my ( $t_name, $ref, $t_coord, $e_coords ) = split /\t/, $line;
-  my @e_coords = split ';', $e_coords;
-  my ($first_digit) = $t_coord =~ /^(\d)/;
-  my ( $t_s, $t_e ) = split ',', $t_coord;
-  if ( $ref =~ /^\d/ ) {
-    $ref = "chr$ref";
+  my $primerSets = param('primerSets');
+  my $organism = param('organism');
+  my $type = param('type'); 
+  my @primerSets = split /\n/ , $primerSets;
+  my $db_dir = "dbs/$organism";    ## genome file
+  my %exons;
+  ##transcript_exons_info.txt
+  open EXONS, "$db_dir/transcript_exons_info.txt" or die "Can't open exon info file: transcript_exons_info.txt\n";
+  while ( my $line = <EXONS> ) {
+    chomp $line;
+    my ( $t_name, $ref, $t_coord, $e_coords ) = split /\t/, $line;
+    my @e_coords = split ';', $e_coords;
+    my ($first_digit) = $t_coord =~ /^(\d)/;
+    my ( $t_s, $t_e ) = split ',', $t_coord;
+    #if ( $ref =~ /^\d+$/ ) {
+    #  $ref = "chr$ref";
+    #}
+    foreach my $e_coord (@e_coords) {
+      my ( $e_s, $e_e ) = split ',', $e_coord;
+      push @{ $exons{$ref}{$t_s}{$t_e}{$t_name}{exons} }, [ $e_s, $e_e ];
+    }
   }
-  foreach my $e_coord (@e_coords) {
-    my ( $e_s, $e_e ) = split ',', $e_coord;
-    push @{ $exons{$ref}{$t_s}{$t_e}{$t_name}{exons} }, [ $e_s, $e_e ];
-  }
-}
 }
 my $time = "tmp/".time();
 my @GBROWSE =("[primers]
@@ -132,7 +131,7 @@ unlink "$time.blatout" if -e "$time.blatout";
 foreach my $db (@db_files) {
   unlink "$time.$count.blatout" if -e "$time.$count.blatout";
   print "Searching against $db" , br;
-  `/usr/local/bin/blat -noHead -tileSize=6 -minScore=10 $db $time.fa $time.$count.blatout`;
+  `/n/local/bin/blat -noHead -tileSize=6 -minScore=10 $db $time.fa $time.$count.blatout`;
   `cat $time.$count.blatout >> $time.blatout`;
   unlink "$time.$count.blatout";
   $count++;
@@ -159,10 +158,18 @@ while ( my $line = <INBLAT> ) {
   my $tEnd        = $line[16];
   my $aln_bp      = $matches + $qBaseInsert + $mismatches;
 
+  my $bad = 0;
   ## throw out if alignment is too small
-  next if ( $matches + $mismatches ) < $qLen;
+  if (( $matches + $mismatches ) < $qLen){
+    $bad{$id}{"$tName:$tStart..$tEnd"}{short_alignment} =  $qLen - ( $matches + $mismatches );
+  }
   ## throw out if there are too many MM
-  next if $mismatches > 0;
+  if ($mismatches > 0){
+    $bad{$id}{"$tName:$tStart..$tEnd"}{mismatches} = $mismatches;
+    $bad++;
+  }
+  next if $bad;
+
   my $id = $qName;
   $id =~ s/_(p\d+)//;
   my ($pair) = $qName =~ /_(p\d)$/;
@@ -179,7 +186,11 @@ my @result_rows = ( Tr ( th ["id","product_size","primerInfo","p1_range","p2_ran
 foreach my $id ( sort keys %primers ) {
   foreach my $tName ( sort keys %{ $primers{$id}{hit} } ) {
     my $pairs_per_target = scalar keys %{ $primers{$id}{hit}{$tName} };
-    next if $pairs_per_target < 2;
+    if ($pairs_per_target != 2){
+      $bad{$id}{$tName}{not_two_primer_alignements_per_target}=$pairs_per_target;
+      $bad++;
+    }
+    next if $bad;
     my %hits;
     foreach my $pair ( sort keys %{ $primers{$id}{hit}{$tName} } ) {
       foreach my $tStart (
@@ -195,7 +206,12 @@ foreach my $id ( sort keys %primers ) {
       }
     }
     ## next if we dont have hits on both strands
-    next if keys %hits < 2;
+    if (keys %hits < 2){
+      my @strands = keys %hits;
+      $bad{$id}{$tName}{primer_pairs_only_on_one_strand}=$strands[0];
+      $bad++;
+    }
+    next if $bad;
     my %pairs;    ## pairs
     foreach my $strand (%hits) {
       foreach my $p ( keys %{ $hits{$strand} } ) {
